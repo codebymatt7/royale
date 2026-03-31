@@ -2,10 +2,6 @@ import { NextResponse } from "next/server";
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { sendPushToOwner } from "@/lib/push";
 
-/**
- * Test endpoint — simulates a new user signup notification.
- * Requires auth (only the app owner can test their own app).
- */
 export async function POST() {
   const supabase = await createServerSupabaseClient();
   if (!supabase) {
@@ -29,10 +25,23 @@ export async function POST() {
     .single();
 
   if (!app) {
-    return NextResponse.json({ error: "No app found" }, { status: 404 });
+    return NextResponse.json({ error: "No app found. Create one first." }, { status: 404 });
   }
 
-  // Send test push
+  // Check if user has any push subscriptions
+  const { data: subs } = await admin
+    .from("push_subscriptions")
+    .select("id")
+    .eq("owner_id", user.id)
+    .limit(1);
+
+  if (!subs || subs.length === 0) {
+    return NextResponse.json(
+      { error: "Enable notifications first, then try again." },
+      { status: 400 },
+    );
+  }
+
   await sendPushToOwner(app.owner_id, {
     title: "Test notification!",
     body: `Push notifications are working for ${app.name}`,
