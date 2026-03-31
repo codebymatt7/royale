@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Users, TrendingUp, Bell, Settings } from "lucide-react";
 import { PushSubscribe } from "@/components/app/push-subscribe";
 import { SetupBanner } from "@/components/app/setup-banner";
+import { TestPingButton } from "@/components/app/test-ping-button";
 import { UserChart } from "@/components/app/user-chart";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { buttonClasses } from "@/components/ui/button";
@@ -55,6 +56,7 @@ export default async function DashboardPage({
           <h1 className="truncate font-display text-lg font-semibold">{app.name}</h1>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          <TestPingButton />
           <PushSubscribe />
           <Link href="/dashboard/profile" className={buttonClasses({ size: "sm", variant: "ghost" })}>
             <Settings className="h-4 w-4" />
