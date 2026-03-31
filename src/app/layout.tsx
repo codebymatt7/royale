@@ -20,12 +20,12 @@ export const viewport = {
 export const metadata: Metadata = {
   manifest: "/manifest.json",
   title: {
-    default: "Royale",
-    template: "%s | Royale",
+    default: "Traction Royale",
+    template: "%s | Traction Royale",
   },
   description:
-    "Know the moment someone signs up. Connect your Supabase app, track user growth, get instant alerts.",
-  metadataBase: new URL("https://startup-royale.vercel.app"),
+    "Know the moment someone signs up. One line of code, push notifications on your phone.",
+  metadataBase: new URL("https://royale-indol.vercel.app"),
 };
 
 export default function RootLayout({

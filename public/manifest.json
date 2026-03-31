@@ -1,6 +1,6 @@
 {
-  "name": "Royale",
-  "short_name": "Royale",
+  "name": "Traction Royale",
+  "short_name": "Traction Royale",
   "description": "Know the moment someone signs up.",
   "start_url": "/dashboard",
   "display": "standalone",

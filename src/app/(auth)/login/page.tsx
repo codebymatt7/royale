@@ -16,7 +16,7 @@ export default async function LoginPage({
 
   return (
     <AuthShell
-      description="Jump back into your dashboard, finish any missing connections, and track movement across your category boards."
+      description="Check your dashboard, see new signups, and track your growth."
       message={params.message}
       status={params.status}
       title="Log in"

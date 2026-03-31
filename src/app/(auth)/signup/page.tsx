@@ -16,7 +16,7 @@ export default async function SignUpPage({
 
   return (
     <AuthShell
-      description="Create an account, set up the startup profile, choose the first metrics to connect, and enter the live traction loop."
+      description="Create an account, name your app, and get push notifications every time a new user signs up."
       message={params.message}
       status={params.status}
       title="Create your account"

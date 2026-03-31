@@ -16,7 +16,7 @@ export function Logo({
       </span>
       <span>
         <span className="block font-display text-lg font-semibold tracking-tight text-[var(--ink-1)]">
-          Royale
+          Traction Royale
         </span>
         <span className="block text-xs uppercase tracking-[0.22em] text-[var(--ink-3)]">
           Know when they sign up.
