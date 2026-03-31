@@ -32,36 +32,32 @@ export function SetupBanner({ token, appUrl }: { token: string; appUrl: string }
             <li className="flex gap-2">
               <span className="shrink-0 font-semibold">1.</span>
               <span>
-                Go to your <strong>other app&apos;s</strong> Supabase dashboard
+                Open your <strong>app&apos;s</strong> Supabase dashboard
               </span>
             </li>
             <li className="flex gap-2">
               <span className="shrink-0 font-semibold">2.</span>
               <span>
-                Navigate to <strong>Database → Webhooks</strong>
+                Left sidebar: <strong>Database</strong> → then click the <strong>Hooks</strong> tab at the top
               </span>
             </li>
             <li className="flex gap-2">
               <span className="shrink-0 font-semibold">3.</span>
-              <span>Click <strong>Create Webhook</strong></span>
+              <span>Click <strong>Create a new hook</strong></span>
             </li>
             <li className="flex gap-2">
               <span className="shrink-0 font-semibold">4.</span>
               <span>
-                Table: <strong>auth.users</strong> · Event: <strong>INSERT</strong>
+                Schema: <strong>auth</strong> · Table: <strong>users</strong> · Event: <strong>Insert</strong>
               </span>
             </li>
             <li className="flex gap-2">
               <span className="shrink-0 font-semibold">5.</span>
-              <span>Type: <strong>HTTP Request</strong></span>
+              <span>Hook type: <strong>HTTP Request</strong></span>
             </li>
             <li className="flex gap-2">
               <span className="shrink-0 font-semibold">6.</span>
-              <span>Method: <strong>POST</strong></span>
-            </li>
-            <li className="flex gap-2">
-              <span className="shrink-0 font-semibold">7.</span>
-              <span>Paste this URL:</span>
+              <span>Method: <strong>POST</strong> · Paste this URL:</span>
             </li>
           </ol>
 
