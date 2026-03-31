@@ -2,16 +2,24 @@ import webpush from "web-push";
 import type { PushSubscription } from "web-push";
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 
-webpush.setVapidDetails(
-  "mailto:hello@royale.app",
-  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
-  process.env.VAPID_PRIVATE_KEY!,
-);
+let vapidConfigured = false;
+
+function ensureVapid() {
+  if (vapidConfigured) return true;
+  const pub = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+  const priv = process.env.VAPID_PRIVATE_KEY;
+  if (!pub || !priv) return false;
+  webpush.setVapidDetails("mailto:hello@royale.app", pub, priv);
+  vapidConfigured = true;
+  return true;
+}
 
 export async function sendPushToOwner(
   ownerId: string,
   payload: { title: string; body: string; url?: string },
 ) {
+  if (!ensureVapid()) return;
+
   const supabase = createServiceRoleSupabaseClient();
   if (!supabase) return;
 
@@ -28,7 +36,6 @@ export async function sendPushToOwner(
     subs.map((row) => {
       const sub = row.subscription as unknown as PushSubscription;
       return webpush.sendNotification(sub, message).catch(() => {
-        // Subscription expired or invalid — clean up
         supabase
           .from("push_subscriptions")
           .delete()
