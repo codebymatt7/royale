@@ -21,10 +21,10 @@ export default async function ConnectPage({
   }
 
   return (
-    <div className="mx-auto max-w-md py-8">
-      <h1 className="font-display text-2xl font-semibold">Name your app</h1>
-      <p className="mt-2 text-sm text-[var(--ink-2)]">
-        Give it a name and we'll generate a tracking snippet you can drop into your signup flow. No keys, no credentials.
+    <div className="mx-auto max-w-md px-4 py-8">
+      <h1 className="font-display text-xl font-semibold">Name your app</h1>
+      <p className="mt-1 text-sm text-[var(--ink-2)]">
+        We&apos;ll show you how to connect in the next step. No keys or credentials needed.
       </p>
 
       <StatusBanner

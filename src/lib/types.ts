@@ -41,6 +41,11 @@ export type Database = {
           owner_id: string;
           name: string;
           track_token: string;
+          logo_url: string | null;
+          bio: string | null;
+          instagram: string | null;
+          tiktok: string | null;
+          x_handle: string | null;
           created_at: string;
           updated_at: string;
         },
@@ -49,6 +54,11 @@ export type Database = {
           owner_id: string;
           name: string;
           track_token?: string;
+          logo_url?: string | null;
+          bio?: string | null;
+          instagram?: string | null;
+          tiktok?: string | null;
+          x_handle?: string | null;
         }
       >;
       user_events: Table<
