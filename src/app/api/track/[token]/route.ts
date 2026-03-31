@@ -3,14 +3,16 @@ import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { sendPushToOwner } from "@/lib/push";
 
 /**
- * Public tracking endpoint. No auth required.
- * Users add this one-liner to their signup flow:
- *   fetch("https://royale-indol.vercel.app/api/track/APP_TOKEN", { method: "POST" })
+ * Public tracking endpoint.
+ * PRIVACY: We intentionally never read the request body.
+ * Supabase webhooks send user data in the body — we discard it entirely.
+ * All we do is increment a counter by 1.
  */
 export async function POST(
   _request: Request,
   { params }: { params: Promise<{ token: string }> },
 ) {
+  // We NEVER read _request.body — no user data is processed or stored.
   const { token } = await params;
 
   const supabase = createServiceRoleSupabaseClient();
@@ -18,7 +20,6 @@ export async function POST(
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 
-  // Look up app by token
   const { data: app } = await supabase
     .from("apps")
     .select("id, owner_id, name")
@@ -29,7 +30,6 @@ export async function POST(
     return NextResponse.json({ error: "Invalid token" }, { status: 404 });
   }
 
-  // Get current total from last event
   const { data: prev } = await supabase
     .from("user_events")
     .select("total_users")
@@ -41,14 +41,13 @@ export async function POST(
   const previousTotal = prev?.total_users ?? 0;
   const newTotal = previousTotal + 1;
 
-  // Record event
+  // Only store: app_id, count, timestamp. No user data ever.
   await supabase.from("user_events").insert({
     app_id: app.id,
     total_users: newTotal,
     new_users: 1,
   });
 
-  // Create notification
   await supabase.from("notifications").insert({
     app_id: app.id,
     owner_id: app.owner_id,
@@ -57,26 +56,22 @@ export async function POST(
     body: `${app.name} now has ${newTotal.toLocaleString()} users`,
   });
 
-  // Push notification
   await sendPushToOwner(app.owner_id, {
     title: "New user!",
     body: `${app.name} now has ${newTotal.toLocaleString()} users`,
     url: "/dashboard",
   });
 
-  // CORS headers so it works from any frontend
-  return NextResponse.json(
-    { ok: true },
-    {
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
-      },
+  // Return nothing useful — just acknowledgment
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
     },
-  );
+  });
 }
 
-// Handle CORS preflight
 export async function OPTIONS() {
   return new NextResponse(null, {
     status: 204,
