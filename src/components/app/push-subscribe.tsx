@@ -38,8 +38,37 @@ export function PushSubscribe() {
       }
 
       const reg = await navigator.serviceWorker.ready;
-      const sub = await reg.pushManager.getSubscription();
-      setState(sub ? "subscribed" : "ready");
+      const existingSub = await reg.pushManager.getSubscription();
+
+      if (existingSub) {
+        // Check if the existing subscription matches the current VAPID key.
+        // If keys were rotated, the old sub is useless — kill it so user can re-subscribe.
+        const currentKey = urlBase64ToUint8Array(vapidKey);
+        const subKey = existingSub.options?.applicationServerKey
+          ? new Uint8Array(existingSub.options.applicationServerKey)
+          : null;
+
+        const keysMatch =
+          subKey &&
+          subKey.length === currentKey.length &&
+          subKey.every((b, i) => b === currentKey[i]);
+
+        if (keysMatch) {
+          // Keys match — make sure it's saved to DB too
+          await fetch("/api/push/subscribe", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(existingSub.toJSON()),
+          });
+          setState("subscribed");
+        } else {
+          // Stale subscription from old VAPID key — remove it
+          await existingSub.unsubscribe();
+          setState("ready");
+        }
+      } else {
+        setState("ready");
+      }
     } catch {
       setState("unsupported");
     }
