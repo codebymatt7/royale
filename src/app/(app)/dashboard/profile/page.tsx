@@ -51,6 +51,20 @@ export default async function ProfilePage({
           <p className="mt-1 text-xs text-[var(--ink-3)]">100 characters max</p>
         </div>
 
+        <div>
+          <FormLabel>Starting users</FormLabel>
+          <Input
+            name="starting_users"
+            type="number"
+            min={0}
+            defaultValue={app.starting_users}
+            placeholder="0"
+          />
+          <p className="mt-1 text-xs text-[var(--ink-3)]">
+            Users you had before connecting. We add new signups on top.
+          </p>
+        </div>
+
         <div className="space-y-3">
           <p className="text-sm font-semibold text-[var(--ink-1)]">Socials</p>
 

@@ -48,6 +48,7 @@ export async function updateProfileAction(formData: FormData) {
   const instagram = String(formData.get("instagram") ?? "").trim().replace(/^@/, "");
   const tiktok = String(formData.get("tiktok") ?? "").trim().replace(/^@/, "");
   const x_handle = String(formData.get("x_handle") ?? "").trim().replace(/^@/, "");
+  const startingUsers = Math.max(0, parseInt(String(formData.get("starting_users") ?? "0"), 10) || 0);
 
   if (!name) {
     redirect(`/dashboard/profile${buildQueryString({ status: "error", message: "App name is required." })}`);
@@ -66,6 +67,7 @@ export async function updateProfileAction(formData: FormData) {
       instagram: instagram || null,
       tiktok: tiktok || null,
       x_handle: x_handle || null,
+      starting_users: startingUsers,
     })
     .eq("owner_id", user.id);
 

@@ -35,8 +35,8 @@ export default async function DashboardPage({
     );
   }
 
-  const stats = await getDashboardStats(app.id);
-  const events = await getUserEventsSeries(app.id, 30);
+  const stats = await getDashboardStats(app.id, app.starting_users);
+  const events = await getUserEventsSeries(app.id, app.starting_users, 30);
   const hasEvents = await hasReceivedEvents(app.id);
   const notifications = await getRecentNotifications(app.id, 5);
   const appUrl = env.appUrl.includes("localhost")

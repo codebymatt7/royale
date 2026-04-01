@@ -28,38 +28,47 @@ export async function POST() {
     return NextResponse.json({ error: "No app found. Create one first." }, { status: 404 });
   }
 
-  // Simulate a real signup event
-  const { data: prev } = await admin
-    .from("user_events")
-    .select("total_users")
-    .eq("app_id", app.id)
-    .order("captured_at", { ascending: false })
-    .limit(1)
-    .single();
-
-  const prevTotal = prev?.total_users ?? 0;
-  const newTotal = prevTotal + 1;
-
+  // Insert test event — marked so it won't affect real count
   await admin.from("user_events").insert({
     app_id: app.id,
-    total_users: newTotal,
+    total_users: 0,
     new_users: 1,
+    is_test: true,
   });
+
+  // Compute real total for display
+  const { count: realCount } = await admin
+    .from("user_events")
+    .select("id", { count: "exact", head: true })
+    .eq("app_id", app.id)
+    .eq("is_test", false);
+
+  const { data: appFull } = await admin
+    .from("apps")
+    .select("starting_users")
+    .eq("id", app.id)
+    .single();
+
+  const realTotal = (appFull?.starting_users ?? 0) + (realCount ?? 0);
 
   await admin.from("notifications").insert({
     app_id: app.id,
     owner_id: app.owner_id,
     type: "new_user" as const,
     title: "Test: New user!",
-    body: `${app.name} now has ${newTotal.toLocaleString()} users`,
+    body: `${app.name} has ${realTotal.toLocaleString()} real users (test ping)`,
   });
 
   // Try push — won't fail if no subscription exists
-  await sendPushToOwner(app.owner_id, {
-    title: "Test: New user!",
-    body: `${app.name} now has ${newTotal.toLocaleString()} users`,
-    url: "/dashboard",
-  });
+  try {
+    await sendPushToOwner(app.owner_id, {
+      title: "Test: New user!",
+      body: `${app.name} has ${realTotal.toLocaleString()} real users (test ping)`,
+      url: "/dashboard",
+    });
+  } catch {
+    // Push failed — that's fine
+  }
 
-  return NextResponse.json({ ok: true, totalUsers: newTotal });
+  return NextResponse.json({ ok: true, totalUsers: realTotal });
 }

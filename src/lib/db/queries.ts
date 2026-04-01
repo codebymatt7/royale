@@ -14,51 +14,53 @@ export async function getApp(ownerId: string): Promise<App | null> {
   return data;
 }
 
-export async function getDashboardStats(appId: string) {
+/**
+ * Real user count = starting_users + number of non-test webhook pings.
+ * This is the source of truth — not a running total_users column.
+ */
+export async function getDashboardStats(appId: string, startingUsers: number) {
   const supabase = createServiceRoleSupabaseClient();
 
   if (!supabase) {
-    return { totalUsers: 0, newToday: 0, newThisWeek: 0 };
+    return { totalUsers: startingUsers, newToday: 0, newThisWeek: 0, signupCount: 0 };
   }
 
-  const { data: latest } = await supabase
+  // Count all real (non-test) events
+  const { count: signupCount } = await supabase
     .from("user_events")
-    .select("total_users, new_users, captured_at")
+    .select("id", { count: "exact", head: true })
     .eq("app_id", appId)
-    .order("captured_at", { ascending: false })
-    .limit(1)
-    .single();
+    .eq("is_test", false);
 
-  if (!latest) {
-    return { totalUsers: 0, newToday: 0, newThisWeek: 0 };
-  }
+  const totalUsers = startingUsers + (signupCount ?? 0);
 
+  // New today
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
 
-  const { data: todayEvents } = await supabase
+  const { count: todayCount } = await supabase
     .from("user_events")
-    .select("new_users")
+    .select("id", { count: "exact", head: true })
     .eq("app_id", appId)
+    .eq("is_test", false)
     .gte("captured_at", todayStart.toISOString());
 
-  const newToday = (todayEvents ?? []).reduce((sum, e) => sum + e.new_users, 0);
-
+  // New this week
   const weekStart = new Date();
   weekStart.setDate(weekStart.getDate() - 7);
 
-  const { data: weekEvents } = await supabase
+  const { count: weekCount } = await supabase
     .from("user_events")
-    .select("new_users")
+    .select("id", { count: "exact", head: true })
     .eq("app_id", appId)
+    .eq("is_test", false)
     .gte("captured_at", weekStart.toISOString());
 
-  const newThisWeek = (weekEvents ?? []).reduce((sum, e) => sum + e.new_users, 0);
-
   return {
-    totalUsers: latest.total_users,
-    newToday,
-    newThisWeek,
+    totalUsers,
+    newToday: todayCount ?? 0,
+    newThisWeek: weekCount ?? 0,
+    signupCount: signupCount ?? 0,
   };
 }
 
@@ -76,21 +78,45 @@ export async function getRecentNotifications(appId: string, limit: number): Prom
   return data ?? [];
 }
 
-export async function getUserEventsSeries(appId: string, days: number = 30) {
+export async function getUserEventsSeries(appId: string, startingUsers: number, days: number = 30) {
   const supabase = createServiceRoleSupabaseClient();
   if (!supabase) return [];
 
   const since = new Date();
   since.setDate(since.getDate() - days);
 
+  // Get all non-test events ordered by time
   const { data } = await supabase
     .from("user_events")
-    .select("total_users, new_users, captured_at")
+    .select("captured_at")
     .eq("app_id", appId)
+    .eq("is_test", false)
     .gte("captured_at", since.toISOString())
     .order("captured_at", { ascending: true });
 
-  return data ?? [];
+  if (!data || data.length === 0) return [];
+
+  // Build running total series
+  let runningTotal = startingUsers;
+
+  // Count events before this window to get correct starting point
+  const { count: priorCount } = await supabase
+    .from("user_events")
+    .select("id", { count: "exact", head: true })
+    .eq("app_id", appId)
+    .eq("is_test", false)
+    .lt("captured_at", since.toISOString());
+
+  runningTotal += priorCount ?? 0;
+
+  return data.map((event) => {
+    runningTotal += 1;
+    return {
+      total_users: runningTotal,
+      new_users: 1,
+      captured_at: event.captured_at,
+    };
+  });
 }
 
 export async function hasReceivedEvents(appId: string): Promise<boolean> {
@@ -101,35 +127,30 @@ export async function hasReceivedEvents(appId: string): Promise<boolean> {
     .from("user_events")
     .select("id", { count: "exact", head: true })
     .eq("app_id", appId)
+    .eq("is_test", false)
     .limit(1);
 
   return (count ?? 0) > 0;
 }
 
 export async function getLeaderboard() {
-  const supabase = createReadonlySupabaseClient();
+  const supabase = createServiceRoleSupabaseClient();
   if (!supabase) return [];
 
-  // Get latest total_users for each app
   const { data: apps } = await supabase
     .from("apps")
-    .select("id, name, logo_url, bio, instagram, tiktok, x_handle");
+    .select("id, name, logo_url, bio, instagram, tiktok, x_handle, starting_users");
 
   if (!apps || apps.length === 0) return [];
-
-  const serviceClient = createServiceRoleSupabaseClient();
-  if (!serviceClient) return [];
 
   const leaderboard = [];
 
   for (const app of apps) {
-    const { data: latest } = await serviceClient
+    const { count } = await supabase
       .from("user_events")
-      .select("total_users")
+      .select("id", { count: "exact", head: true })
       .eq("app_id", app.id)
-      .order("captured_at", { ascending: false })
-      .limit(1)
-      .single();
+      .eq("is_test", false);
 
     leaderboard.push({
       id: app.id,
@@ -139,12 +160,10 @@ export async function getLeaderboard() {
       instagram: app.instagram,
       tiktok: app.tiktok,
       xHandle: app.x_handle,
-      totalUsers: latest?.total_users ?? 0,
+      totalUsers: app.starting_users + (count ?? 0),
     });
   }
 
-  // Sort by user count descending
   leaderboard.sort((a, b) => b.totalUsers - a.totalUsers);
-
   return leaderboard;
 }

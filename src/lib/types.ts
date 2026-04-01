@@ -46,6 +46,7 @@ export type Database = {
           instagram: string | null;
           tiktok: string | null;
           x_handle: string | null;
+          starting_users: number;
           created_at: string;
           updated_at: string;
         },
@@ -59,6 +60,7 @@ export type Database = {
           instagram?: string | null;
           tiktok?: string | null;
           x_handle?: string | null;
+          starting_users?: number;
         }
       >;
       user_events: Table<
@@ -67,6 +69,7 @@ export type Database = {
           app_id: string;
           total_users: number;
           new_users: number;
+          is_test: boolean;
           captured_at: string;
           created_at: string;
         },
@@ -75,6 +78,7 @@ export type Database = {
           app_id: string;
           total_users: number;
           new_users: number;
+          is_test?: boolean;
           captured_at?: string;
         }
       >;
