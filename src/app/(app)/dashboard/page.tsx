@@ -56,7 +56,7 @@ export default async function DashboardPage({
           <h1 className="truncate font-display text-lg font-semibold">{app.name}</h1>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <TestPingButton trackToken={app.track_token} appUrl={appUrl} />
+          <TestPingButton trackToken={app.track_token} />
           <PushSubscribe />
           <Link href="/dashboard/profile" className={buttonClasses({ size: "sm", variant: "ghost" })}>
             <Settings className="h-4 w-4" />
