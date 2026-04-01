@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import { Zap } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { buttonClasses } from "@/components/ui/button";
 
 export function TestPingButton() {
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
+  const router = useRouter();
 
   async function handleTest() {
     setStatus("sending");
@@ -15,6 +17,8 @@ export function TestPingButton() {
       const res = await fetch("/api/test-ping", { method: "POST" });
       if (res.ok) {
         setStatus("sent");
+        // Refresh the page to show new notification + updated count
+        router.refresh();
         setTimeout(() => setStatus("idle"), 3000);
       } else {
         const data = await res.json().catch(() => ({}));

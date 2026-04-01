@@ -28,25 +28,38 @@ export async function POST() {
     return NextResponse.json({ error: "No app found. Create one first." }, { status: 404 });
   }
 
-  // Check if user has any push subscriptions
-  const { data: subs } = await admin
-    .from("push_subscriptions")
-    .select("id")
-    .eq("owner_id", user.id)
-    .limit(1);
+  // Simulate a real signup event
+  const { data: prev } = await admin
+    .from("user_events")
+    .select("total_users")
+    .eq("app_id", app.id)
+    .order("captured_at", { ascending: false })
+    .limit(1)
+    .single();
 
-  if (!subs || subs.length === 0) {
-    return NextResponse.json(
-      { error: "Enable notifications first, then try again." },
-      { status: 400 },
-    );
-  }
+  const prevTotal = prev?.total_users ?? 0;
+  const newTotal = prevTotal + 1;
 
+  await admin.from("user_events").insert({
+    app_id: app.id,
+    total_users: newTotal,
+    new_users: 1,
+  });
+
+  await admin.from("notifications").insert({
+    app_id: app.id,
+    owner_id: app.owner_id,
+    type: "new_user" as const,
+    title: "Test: New user!",
+    body: `${app.name} now has ${newTotal.toLocaleString()} users`,
+  });
+
+  // Try push — won't fail if no subscription exists
   await sendPushToOwner(app.owner_id, {
-    title: "Test notification!",
-    body: `Push notifications are working for ${app.name}`,
+    title: "Test: New user!",
+    body: `${app.name} now has ${newTotal.toLocaleString()} users`,
     url: "/dashboard",
   });
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, totalUsers: newTotal });
 }
