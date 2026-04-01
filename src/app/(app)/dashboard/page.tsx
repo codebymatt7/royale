@@ -125,8 +125,9 @@ export default async function DashboardPage({
                   <p className="text-sm font-semibold text-[var(--ink-1)]">{n.title}</p>
                   <p className="text-xs text-[var(--ink-2)]">{n.body}</p>
                 </div>
-                <time className="shrink-0 text-xs text-[var(--ink-3)]">
-                  {new Date(n.created_at).toLocaleDateString()}
+                <time className="shrink-0 text-right text-xs text-[var(--ink-3)]">
+                  {new Date(n.created_at).toLocaleDateString()}{" "}
+                  {new Date(n.created_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
                 </time>
               </div>
             ))}

@@ -23,7 +23,7 @@ export async function POST(request: Request) {
   );
 
   // Upsert subscription (endpoint is unique per device)
-  await admin.from("push_subscriptions").upsert(
+  const { error: upsertError } = await admin.from("push_subscriptions").upsert(
     {
       owner_id: user.id,
       endpoint: subscription.endpoint,
@@ -31,6 +31,11 @@ export async function POST(request: Request) {
     },
     { onConflict: "endpoint" },
   );
+
+  if (upsertError) {
+    console.error("Push subscription upsert failed:", upsertError);
+    return NextResponse.json({ error: upsertError.message }, { status: 500 });
+  }
 
   return NextResponse.json({ ok: true });
 }

@@ -16,7 +16,7 @@ function urlBase64ToUint8Array(base64String: string) {
 }
 
 export function PushSubscribe() {
-  const [state, setState] = useState<"loading" | "unsupported" | "ready" | "subscribed">("loading");
+  const [state, setState] = useState<"loading" | "unsupported" | "blocked" | "ready" | "subscribed">("loading");
   const [busy, setBusy] = useState(false);
 
   const checkState = useCallback(async () => {
@@ -29,6 +29,12 @@ export function PushSubscribe() {
       const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
       if (!vapidKey) {
         setState("unsupported");
+        return;
+      }
+
+      // Show a helpful state if user has blocked notifications
+      if (Notification.permission === "denied") {
+        setState("blocked");
         return;
       }
 
@@ -49,7 +55,11 @@ export function PushSubscribe() {
     try {
       const permission = await Notification.requestPermission();
       if (permission !== "granted") {
-        alert("Notification permission denied. Check your browser/phone settings.");
+        alert(
+          permission === "denied"
+            ? "Notifications are blocked. Click the lock/bell icon in your URL bar → set Notifications to Allow → then refresh."
+            : "Notification permission was dismissed. Tap the button again to retry."
+        );
         setBusy(false);
         return;
       }
@@ -103,6 +113,19 @@ export function PushSubscribe() {
   }
 
   if (state === "loading" || state === "unsupported") return null;
+
+  if (state === "blocked") {
+    return (
+      <button
+        type="button"
+        onClick={() => alert("Notifications are blocked.\n\nClick the lock/bell icon in your URL bar → set Notifications to Allow → then refresh the page.")}
+        className={buttonClasses({ size: "sm", variant: "secondary" })}
+      >
+        <BellOff className="mr-1.5 h-3.5 w-3.5 text-red-500" />
+        Blocked
+      </button>
+    );
+  }
 
   return state === "subscribed" ? (
     <button
