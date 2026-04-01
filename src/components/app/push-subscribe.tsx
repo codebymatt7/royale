@@ -32,7 +32,6 @@ export function PushSubscribe() {
         return;
       }
 
-      // Show a helpful state if user has blocked notifications
       if (Notification.permission === "denied") {
         setState("blocked");
         return;
@@ -57,9 +56,10 @@ export function PushSubscribe() {
       if (permission !== "granted") {
         alert(
           permission === "denied"
-            ? "Notifications are blocked. Click the lock/bell icon in your URL bar → set Notifications to Allow → then refresh."
+            ? "Notifications are blocked.\n\nClick the lock/bell icon in your URL bar \u2192 set Notifications to Allow \u2192 then refresh."
             : "Notification permission was dismissed. Tap the button again to retry."
         );
+        setState(permission === "denied" ? "blocked" : "ready");
         setBusy(false);
         return;
       }
@@ -92,33 +92,14 @@ export function PushSubscribe() {
     setBusy(false);
   }
 
-  async function handleUnsubscribe() {
-    setBusy(true);
-    try {
-      const reg = await navigator.serviceWorker.ready;
-      const sub = await reg.pushManager.getSubscription();
-      if (sub) {
-        await sub.unsubscribe();
-        await fetch("/api/push/subscribe", {
-          method: "DELETE",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ endpoint: sub.endpoint }),
-        });
-      }
-      setState("ready");
-    } catch (err) {
-      console.error("Push unsubscribe failed:", err);
-    }
-    setBusy(false);
-  }
-
-  if (state === "loading" || state === "unsupported") return null;
+  // Don't render anything if loading, unsupported, or already subscribed
+  if (state === "loading" || state === "unsupported" || state === "subscribed") return null;
 
   if (state === "blocked") {
     return (
       <button
         type="button"
-        onClick={() => alert("Notifications are blocked.\n\nClick the lock/bell icon in your URL bar → set Notifications to Allow → then refresh the page.")}
+        onClick={() => alert("Notifications are blocked.\n\nClick the lock/bell icon in your URL bar \u2192 set Notifications to Allow \u2192 then refresh the page.")}
         className={buttonClasses({ size: "sm", variant: "secondary" })}
       >
         <BellOff className="mr-1.5 h-3.5 w-3.5 text-red-500" />
@@ -127,17 +108,8 @@ export function PushSubscribe() {
     );
   }
 
-  return state === "subscribed" ? (
-    <button
-      type="button"
-      onClick={handleUnsubscribe}
-      disabled={busy}
-      className={buttonClasses({ size: "sm", variant: "ghost" })}
-    >
-      <BellOff className="mr-1.5 h-3.5 w-3.5" />
-      {busy ? "..." : "On"}
-    </button>
-  ) : (
+  // state === "ready" — show enable button
+  return (
     <button
       type="button"
       onClick={handleSubscribe}
@@ -145,7 +117,7 @@ export function PushSubscribe() {
       className={buttonClasses({ size: "sm", variant: "secondary" })}
     >
       <Bell className="mr-1.5 h-3.5 w-3.5" />
-      {busy ? "..." : "Notifications"}
+      {busy ? "..." : "Enable notifications"}
     </button>
   );
 }

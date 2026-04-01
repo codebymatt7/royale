@@ -5,7 +5,7 @@ import { Zap } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { buttonClasses } from "@/components/ui/button";
 
-export function TestPingButton({ trackToken }: { trackToken: string }) {
+export function TestPingButton({ trackToken: _trackToken }: { trackToken: string }) {
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const router = useRouter();
 
@@ -13,7 +13,7 @@ export function TestPingButton({ trackToken }: { trackToken: string }) {
     setStatus("sending");
     try {
       // Use relative URL — always hits the same origin
-      const res = await fetch(`/api/track/${trackToken}`, { method: "POST" });
+      const res = await fetch("/api/test-ping", { method: "POST" });
       if (res.ok || res.status === 204) {
         setStatus("sent");
         setTimeout(() => {
