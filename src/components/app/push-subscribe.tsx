@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Bell, BellOff } from "lucide-react";
+import { Bell } from "lucide-react";
 import { buttonClasses } from "@/components/ui/button";
 
 function urlBase64ToUint8Array(base64String: string) {
@@ -16,18 +16,12 @@ function urlBase64ToUint8Array(base64String: string) {
 }
 
 export function PushSubscribe() {
-  const [state, setState] = useState<"loading" | "unsupported" | "blocked" | "ready" | "subscribed">("loading");
+  const [state, setState] = useState<"loading" | "unsupported" | "blocked" | "needs_sub" | "subscribed">("loading");
   const [busy, setBusy] = useState(false);
 
-  const checkState = useCallback(async () => {
+  const checkAndSync = useCallback(async () => {
     try {
       if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
-        setState("unsupported");
-        return;
-      }
-
-      const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-      if (!vapidKey) {
         setState("unsupported");
         return;
       }
@@ -37,37 +31,34 @@ export function PushSubscribe() {
         return;
       }
 
+      const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+      if (!vapidKey) {
+        setState("unsupported");
+        return;
+      }
+
       const reg = await navigator.serviceWorker.ready;
       const existingSub = await reg.pushManager.getSubscription();
 
-      if (existingSub) {
-        // Check if the existing subscription matches the current VAPID key.
-        // If keys were rotated, the old sub is useless — kill it so user can re-subscribe.
-        const currentKey = urlBase64ToUint8Array(vapidKey);
-        const subKey = existingSub.options?.applicationServerKey
-          ? new Uint8Array(existingSub.options.applicationServerKey)
-          : null;
+      if (!existingSub) {
+        // No subscription at all
+        setState("needs_sub");
+        return;
+      }
 
-        const keysMatch =
-          subKey &&
-          subKey.length === currentKey.length &&
-          subKey.every((b, i) => b === currentKey[i]);
+      // We have a browser subscription — sync it to DB
+      const res = await fetch("/api/push/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(existingSub.toJSON()),
+      });
 
-        if (keysMatch) {
-          // Keys match — make sure it's saved to DB too
-          await fetch("/api/push/subscribe", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(existingSub.toJSON()),
-          });
-          setState("subscribed");
-        } else {
-          // Stale subscription from old VAPID key — remove it
-          await existingSub.unsubscribe();
-          setState("ready");
-        }
+      if (res.ok) {
+        setState("subscribed");
       } else {
-        setState("ready");
+        // DB save failed — old key? Nuke and re-create
+        await existingSub.unsubscribe();
+        setState("needs_sub");
       }
     } catch {
       setState("unsupported");
@@ -75,20 +66,21 @@ export function PushSubscribe() {
   }, []);
 
   useEffect(() => {
-    checkState();
-  }, [checkState]);
+    checkAndSync();
+  }, [checkAndSync]);
 
   async function handleSubscribe() {
     setBusy(true);
     try {
+      // Request permission
       const permission = await Notification.requestPermission();
       if (permission !== "granted") {
         alert(
           permission === "denied"
-            ? "Notifications are blocked.\n\nClick the lock/bell icon in your URL bar \u2192 set Notifications to Allow \u2192 then refresh."
+            ? "Notifications are blocked.\n\nClick the lock/bell icon in your URL bar → set Notifications to Allow → then refresh."
             : "Notification permission was dismissed. Tap the button again to retry."
         );
-        setState(permission === "denied" ? "blocked" : "ready");
+        setState(permission === "denied" ? "blocked" : "needs_sub");
         setBusy(false);
         return;
       }
@@ -96,11 +88,17 @@ export function PushSubscribe() {
       const reg = await navigator.serviceWorker.ready;
       const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!;
 
+      // Kill any existing subscription first
+      const oldSub = await reg.pushManager.getSubscription();
+      if (oldSub) await oldSub.unsubscribe();
+
+      // Create fresh subscription with current VAPID key
       const subscription = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(vapidKey),
       });
 
+      // Save to DB
       const res = await fetch("/api/push/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -109,7 +107,7 @@ export function PushSubscribe() {
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || "Subscribe failed");
+        throw new Error(errData.error || "Failed to save subscription");
       }
 
       setState("subscribed");
@@ -121,23 +119,21 @@ export function PushSubscribe() {
     setBusy(false);
   }
 
-  // Don't render anything if loading, unsupported, or already subscribed
   if (state === "loading" || state === "unsupported" || state === "subscribed") return null;
 
   if (state === "blocked") {
     return (
       <button
         type="button"
-        onClick={() => alert("Notifications are blocked.\n\nClick the lock/bell icon in your URL bar \u2192 set Notifications to Allow \u2192 then refresh the page.")}
+        onClick={() => alert("Notifications are blocked.\n\nClick the lock/bell icon in your URL bar → set Notifications to Allow → then refresh the page.")}
         className={buttonClasses({ size: "sm", variant: "secondary" })}
       >
-        <BellOff className="mr-1.5 h-3.5 w-3.5 text-red-500" />
+        <Bell className="mr-1.5 h-3.5 w-3.5 text-red-500" />
         Blocked
       </button>
     );
   }
 
-  // state === "ready" — show enable button
   return (
     <button
       type="button"
@@ -146,7 +142,7 @@ export function PushSubscribe() {
       className={buttonClasses({ size: "sm", variant: "secondary" })}
     >
       <Bell className="mr-1.5 h-3.5 w-3.5" />
-      {busy ? "..." : "Enable notifications"}
+      {busy ? "Enabling..." : "Enable notifications"}
     </button>
   );
 }

@@ -51,7 +51,10 @@ export async function GET() {
     }
 
     // 4. Try sending a test push to each subscription
-    webpush.setVapidDetails("mailto:hello@royale.app", pub, priv);
+    const cleanPub = pub.replace(/=+$/, "").trim();
+    const cleanPriv = priv.replace(/=+$/, "").trim();
+    log.push(`Public key length: ${cleanPub.length}, Private key length: ${cleanPriv.length}`);
+    webpush.setVapidDetails("mailto:hello@royale.app", cleanPub, cleanPriv);
 
     for (const row of subs) {
       const sub = row.subscription as unknown as webpush.PushSubscription;

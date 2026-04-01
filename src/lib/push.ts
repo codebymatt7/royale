@@ -4,12 +4,17 @@ import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 
 let vapidConfigured = false;
 
+/** Strip any Base64 padding — web-push requires URL-safe Base64 without '=' */
+function stripPadding(key: string) {
+  return key.replace(/=+$/, "").trim();
+}
+
 function ensureVapid() {
   if (vapidConfigured) return true;
   const pub = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
   const priv = process.env.VAPID_PRIVATE_KEY;
   if (!pub || !priv) return false;
-  webpush.setVapidDetails("mailto:hello@royale.app", pub, priv);
+  webpush.setVapidDetails("mailto:hello@royale.app", stripPadding(pub), stripPadding(priv));
   vapidConfigured = true;
   return true;
 }
