@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Bell, BellOff } from "lucide-react";
 import { buttonClasses } from "@/components/ui/button";
 
@@ -16,41 +16,46 @@ function urlBase64ToUint8Array(base64String: string) {
 }
 
 export function PushSubscribe() {
-  const [supported, setSupported] = useState(false);
-  const [subscribed, setSubscribed] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [swReady, setSwReady] = useState(false);
+  const [state, setState] = useState<"loading" | "unsupported" | "ready" | "subscribed">("loading");
+  const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-    if (!vapidKey) return;
-    if (!("serviceWorker" in navigator)) return;
-
-    // Wait for SW to actually be ready
-    navigator.serviceWorker.ready.then((reg) => {
-      setSwReady(true);
-      if ("PushManager" in window) {
-        setSupported(true);
-        reg.pushManager.getSubscription().then((sub) => {
-          setSubscribed(!!sub);
-        });
-      }
-    });
-  }, []);
-
-  async function handleSubscribe() {
-    setLoading(true);
+  const checkState = useCallback(async () => {
     try {
-      // Request notification permission first
-      const permission = await Notification.requestPermission();
-      if (permission !== "granted") {
-        setLoading(false);
+      if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+        setState("unsupported");
+        return;
+      }
+
+      const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+      if (!vapidKey) {
+        setState("unsupported");
         return;
       }
 
       const reg = await navigator.serviceWorker.ready;
-      const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-      if (!vapidKey) throw new Error("VAPID key not configured");
+      const sub = await reg.pushManager.getSubscription();
+      setState(sub ? "subscribed" : "ready");
+    } catch {
+      setState("unsupported");
+    }
+  }, []);
+
+  useEffect(() => {
+    checkState();
+  }, [checkState]);
+
+  async function handleSubscribe() {
+    setBusy(true);
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        alert("Notification permission denied. Check your browser/phone settings.");
+        setBusy(false);
+        return;
+      }
+
+      const reg = await navigator.serviceWorker.ready;
+      const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!;
 
       const subscription = await reg.pushManager.subscribe({
         userVisibleOnly: true,
@@ -63,18 +68,22 @@ export function PushSubscribe() {
         body: JSON.stringify(subscription.toJSON()),
       });
 
-      if (!res.ok) throw new Error("Subscribe API failed");
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Subscribe failed");
+      }
 
-      setSubscribed(true);
+      setState("subscribed");
     } catch (err) {
       console.error("Push subscribe failed:", err);
-      alert("Could not enable notifications. On iOS, you need to add this app to your home screen first.");
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      alert(`Could not enable notifications: ${msg}\n\nOn iOS, make sure you opened this from your Home Screen (not Safari).`);
     }
-    setLoading(false);
+    setBusy(false);
   }
 
   async function handleUnsubscribe() {
-    setLoading(true);
+    setBusy(true);
     try {
       const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.getSubscription();
@@ -86,35 +95,34 @@ export function PushSubscribe() {
           body: JSON.stringify({ endpoint: sub.endpoint }),
         });
       }
-      setSubscribed(false);
+      setState("ready");
     } catch (err) {
       console.error("Push unsubscribe failed:", err);
     }
-    setLoading(false);
+    setBusy(false);
   }
 
-  // Don't show until SW is ready and push is supported
-  if (!swReady || !supported) return null;
+  if (state === "loading" || state === "unsupported") return null;
 
-  return subscribed ? (
+  return state === "subscribed" ? (
     <button
       type="button"
       onClick={handleUnsubscribe}
-      disabled={loading}
+      disabled={busy}
       className={buttonClasses({ size: "sm", variant: "ghost" })}
     >
       <BellOff className="mr-1.5 h-3.5 w-3.5" />
-      {loading ? "..." : "On"}
+      {busy ? "..." : "On"}
     </button>
   ) : (
     <button
       type="button"
       onClick={handleSubscribe}
-      disabled={loading}
+      disabled={busy}
       className={buttonClasses({ size: "sm", variant: "secondary" })}
     >
       <Bell className="mr-1.5 h-3.5 w-3.5" />
-      {loading ? "Enabling..." : "Notifications"}
+      {busy ? "..." : "Notifications"}
     </button>
   );
 }
