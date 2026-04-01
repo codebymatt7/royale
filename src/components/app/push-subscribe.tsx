@@ -41,25 +41,12 @@ export function PushSubscribe() {
       const existingSub = await reg.pushManager.getSubscription();
 
       if (!existingSub) {
-        // No subscription at all
         setState("needs_sub");
         return;
       }
 
-      // We have a browser subscription — sync it to DB
-      const res = await fetch("/api/push/subscribe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(existingSub.toJSON()),
-      });
-
-      if (res.ok) {
-        setState("subscribed");
-      } else {
-        // DB save failed — old key? Nuke and re-create
-        await existingSub.unsubscribe();
-        setState("needs_sub");
-      }
+      // Browser has a subscription — just trust it, don't re-POST every load
+      setState("subscribed");
     } catch {
       setState("unsupported");
     }

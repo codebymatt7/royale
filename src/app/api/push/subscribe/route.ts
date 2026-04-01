@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import webpush from "web-push";
 
 export async function POST(request: Request) {
   const supabase = await createServerSupabaseClient();
@@ -36,30 +35,6 @@ export async function POST(request: Request) {
   if (upsertError) {
     console.error("Push subscription upsert failed:", upsertError);
     return NextResponse.json({ error: upsertError.message }, { status: 500 });
-  }
-
-  // Send a welcome push immediately to confirm it works
-  try {
-    const pub = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-    const priv = process.env.VAPID_PRIVATE_KEY;
-    if (pub && priv) {
-      webpush.setVapidDetails(
-        "mailto:hello@royale.app",
-        pub.replace(/=+$/, "").trim(),
-        priv.replace(/=+$/, "").trim(),
-      );
-      await webpush.sendNotification(
-        subscription as webpush.PushSubscription,
-        JSON.stringify({
-          title: "Notifications enabled!",
-          body: "You'll get a ping every time someone signs up.",
-          url: "/dashboard",
-        }),
-      );
-    }
-  } catch (pushErr) {
-    console.error("Welcome push failed:", pushErr);
-    // Don't fail the request — subscription is saved even if this push fails
   }
 
   return NextResponse.json({ ok: true });

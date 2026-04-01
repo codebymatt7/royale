@@ -12,6 +12,7 @@ export async function POST(
 ) {
   try {
     const { token } = await params;
+    console.log(`[track] Received ping for token: ${token.slice(0, 8)}...`);
 
     const supabase = createServiceRoleSupabaseClient();
     if (!supabase) {
