@@ -4,15 +4,19 @@ import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 /**
  * Public tracking endpoint.
  * PRIVACY: We intentionally never read the request body.
- * All we do is increment a counter by 1.
+ *
+ * POST /api/track/{token}             → new signup (+1)
+ * POST /api/track/{token}?event=delete → account deleted (-1)
  */
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ token: string }> },
 ) {
   try {
     const { token } = await params;
-    console.log(`[track] Received ping for token: ${token.slice(0, 8)}...`);
+    const url = new URL(request.url);
+    const event = url.searchParams.get("event"); // "delete" or null
+    const isDelete = event === "delete";
 
     const supabase = createServiceRoleSupabaseClient();
     if (!supabase) {
@@ -45,18 +49,18 @@ export async function POST(
       });
     }
 
-    // Insert the event (not a test)
+    // Insert event: +1 for signup, -1 for delete
     await supabase.from("user_events").insert({
       app_id: app.id,
-      total_users: 0, // legacy column, ignored by new count model
-      new_users: 1,
+      total_users: 0,
+      new_users: isDelete ? -1 : 1,
       is_test: false,
     });
 
-    // Compute real total for notification text
-    const { count: realCount } = await supabase
+    // Compute real total: starting_users + sum of all new_users values
+    const { data: sumData } = await supabase
       .from("user_events")
-      .select("id", { count: "exact", head: true })
+      .select("new_users")
       .eq("app_id", app.id)
       .eq("is_test", false);
 
@@ -66,26 +70,29 @@ export async function POST(
       .eq("id", app.id)
       .single();
 
-    const newTotal = (appFull?.starting_users ?? 0) + (realCount ?? 0);
+    const netEvents = (sumData ?? []).reduce((sum, row) => sum + row.new_users, 0);
+    const newTotal = Math.max(0, (appFull?.starting_users ?? 0) + netEvents);
+
+    // Notification
+    const title = isDelete ? "User left" : "New user!";
+    const body = isDelete
+      ? `${app.name} now has ${newTotal.toLocaleString()} users`
+      : `${app.name} now has ${newTotal.toLocaleString()} users`;
 
     await supabase.from("notifications").insert({
       app_id: app.id,
       owner_id: app.owner_id,
-      type: "new_user" as const,
-      title: "New user!",
-      body: `${app.name} now has ${newTotal.toLocaleString()} users`,
+      type: isDelete ? "user_left" : "new_user",
+      title,
+      body,
     });
 
-    // Push notification — dynamic import so web-push can't crash the route
+    // Push notification
     try {
       const { sendPushToOwner } = await import("@/lib/push");
-      await sendPushToOwner(app.owner_id, {
-        title: "New user!",
-        body: `${app.name} now has ${newTotal.toLocaleString()} users`,
-        url: "/dashboard",
-      });
+      await sendPushToOwner(app.owner_id, { title, body, url: "/dashboard" });
     } catch {
-      // Push failed — that's fine, the count and notification are already saved
+      // Push failed — count and notification are already saved
     }
 
     return new NextResponse(null, {
@@ -101,9 +108,7 @@ export async function POST(
       { error: "Internal error" },
       {
         status: 500,
-        headers: {
-          "Access-Control-Allow-Origin": "*",
-        },
+        headers: { "Access-Control-Allow-Origin": "*" },
       },
     );
   }

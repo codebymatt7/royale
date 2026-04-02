@@ -36,10 +36,10 @@ export async function POST() {
     is_test: true,
   });
 
-  // Compute real total for display
-  const { count: realCount } = await admin
+  // Compute real total (sum-based for +1/-1 events)
+  const { data: events } = await admin
     .from("user_events")
-    .select("id", { count: "exact", head: true })
+    .select("new_users")
     .eq("app_id", app.id)
     .eq("is_test", false);
 
@@ -49,7 +49,8 @@ export async function POST() {
     .eq("id", app.id)
     .single();
 
-  const realTotal = (appFull?.starting_users ?? 0) + (realCount ?? 0);
+  const netEvents = (events ?? []).reduce((sum, row) => sum + row.new_users, 0);
+  const realTotal = Math.max(0, (appFull?.starting_users ?? 0) + netEvents);
 
   await admin.from("notifications").insert({
     app_id: app.id,

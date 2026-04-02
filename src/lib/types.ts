@@ -6,7 +6,7 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[];
 
-export type NotificationType = "new_user" | "milestone_reached";
+export type NotificationType = "new_user" | "user_left" | "milestone_reached";
 
 type Table<Row, Insert, Update = Partial<Insert>> = {
   Row: Row;

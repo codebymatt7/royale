@@ -1,4 +1,4 @@
-import { createServiceRoleSupabaseClient, createReadonlySupabaseClient } from "@/lib/supabase/server";
+import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import type { App, Notification } from "@/lib/types";
 
 export async function getApp(ownerId: string): Promise<App | null> {
@@ -14,9 +14,22 @@ export async function getApp(ownerId: string): Promise<App | null> {
   return data;
 }
 
+/** Sum all new_users values (+1 for signups, -1 for deletes) */
+async function getNetSignups(supabase: NonNullable<ReturnType<typeof createServiceRoleSupabaseClient>>, appId: string, since?: string) {
+  const query = supabase
+    .from("user_events")
+    .select("new_users")
+    .eq("app_id", appId)
+    .eq("is_test", false);
+
+  if (since) query.gte("captured_at", since);
+
+  const { data } = await query;
+  return (data ?? []).reduce((sum, row) => sum + row.new_users, 0);
+}
+
 /**
- * Real user count = starting_users + number of non-test webhook pings.
- * This is the source of truth — not a running total_users column.
+ * Real user count = starting_users + net signups (signups minus deletes).
  */
 export async function getDashboardStats(appId: string, startingUsers: number) {
   const supabase = createServiceRoleSupabaseClient();
@@ -25,42 +38,25 @@ export async function getDashboardStats(appId: string, startingUsers: number) {
     return { totalUsers: startingUsers, newToday: 0, newThisWeek: 0, signupCount: 0 };
   }
 
-  // Count all real (non-test) events
-  const { count: signupCount } = await supabase
-    .from("user_events")
-    .select("id", { count: "exact", head: true })
-    .eq("app_id", appId)
-    .eq("is_test", false);
-
-  const totalUsers = startingUsers + (signupCount ?? 0);
+  // Net total (all time)
+  const netAll = await getNetSignups(supabase, appId);
+  const totalUsers = Math.max(0, startingUsers + netAll);
 
   // New today
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
-
-  const { count: todayCount } = await supabase
-    .from("user_events")
-    .select("id", { count: "exact", head: true })
-    .eq("app_id", appId)
-    .eq("is_test", false)
-    .gte("captured_at", todayStart.toISOString());
+  const netToday = await getNetSignups(supabase, appId, todayStart.toISOString());
 
   // New this week
   const weekStart = new Date();
   weekStart.setDate(weekStart.getDate() - 7);
-
-  const { count: weekCount } = await supabase
-    .from("user_events")
-    .select("id", { count: "exact", head: true })
-    .eq("app_id", appId)
-    .eq("is_test", false)
-    .gte("captured_at", weekStart.toISOString());
+  const netWeek = await getNetSignups(supabase, appId, weekStart.toISOString());
 
   return {
     totalUsers,
-    newToday: todayCount ?? 0,
-    newThisWeek: weekCount ?? 0,
-    signupCount: signupCount ?? 0,
+    newToday: netToday,
+    newThisWeek: netWeek,
+    signupCount: netAll,
   };
 }
 
@@ -88,7 +84,7 @@ export async function getUserEventsSeries(appId: string, startingUsers: number, 
   // Get all non-test events ordered by time
   const { data } = await supabase
     .from("user_events")
-    .select("captured_at")
+    .select("new_users, captured_at")
     .eq("app_id", appId)
     .eq("is_test", false)
     .gte("captured_at", since.toISOString())
@@ -96,24 +92,16 @@ export async function getUserEventsSeries(appId: string, startingUsers: number, 
 
   if (!data || data.length === 0) return [];
 
-  // Build running total series
-  let runningTotal = startingUsers;
-
-  // Count events before this window to get correct starting point
-  const { count: priorCount } = await supabase
-    .from("user_events")
-    .select("id", { count: "exact", head: true })
-    .eq("app_id", appId)
-    .eq("is_test", false)
-    .lt("captured_at", since.toISOString());
-
-  runningTotal += priorCount ?? 0;
+  // Count net events before this window to get correct starting point
+  const priorNet = await getNetSignups(supabase, appId, undefined);
+  const windowNet = (data).reduce((sum, row) => sum + row.new_users, 0);
+  let runningTotal = Math.max(0, startingUsers + priorNet - windowNet);
 
   return data.map((event) => {
-    runningTotal += 1;
+    runningTotal = Math.max(0, runningTotal + event.new_users);
     return {
       total_users: runningTotal,
-      new_users: 1,
+      new_users: event.new_users,
       captured_at: event.captured_at,
     };
   });
@@ -146,12 +134,7 @@ export async function getLeaderboard() {
   const leaderboard = [];
 
   for (const app of apps) {
-    const { count } = await supabase
-      .from("user_events")
-      .select("id", { count: "exact", head: true })
-      .eq("app_id", app.id)
-      .eq("is_test", false);
-
+    const net = await getNetSignups(supabase, app.id);
     leaderboard.push({
       id: app.id,
       name: app.name,
@@ -160,7 +143,7 @@ export async function getLeaderboard() {
       instagram: app.instagram,
       tiktok: app.tiktok,
       xHandle: app.x_handle,
-      totalUsers: app.starting_users + (count ?? 0),
+      totalUsers: Math.max(0, app.starting_users + net),
     });
   }
 
