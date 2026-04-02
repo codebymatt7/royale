@@ -29,6 +29,22 @@ export async function POST(
       return NextResponse.json({ error: "Invalid token" }, { status: 404 });
     }
 
+    // Rate limit: ignore duplicate pings within 5 seconds (prevents spam)
+    const { data: recent } = await supabase
+      .from("user_events")
+      .select("id")
+      .eq("app_id", app.id)
+      .eq("is_test", false)
+      .gte("captured_at", new Date(Date.now() - 5000).toISOString())
+      .limit(1);
+
+    if (recent && recent.length > 0) {
+      return new NextResponse(null, {
+        status: 204,
+        headers: { "Access-Control-Allow-Origin": "*" },
+      });
+    }
+
     // Insert the event (not a test)
     await supabase.from("user_events").insert({
       app_id: app.id,
